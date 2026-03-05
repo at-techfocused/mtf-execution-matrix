@@ -558,11 +558,7 @@ if barstate.islast
             float best = 0.0
             int best_idx = -1
             for k = 0 to N - 1
-                bool already_used = false
-                for m = 0 to array.size(top_indices) - 1
-                    if array.get(top_indices, m) == k
-                        already_used := true
-                        break
+                bool already_used = array.includes(top_indices, k)
                 if not already_used and array.get(vol_buckets, k) > best
                     best := array.get(vol_buckets, k)
                     best_idx := k
@@ -574,20 +570,21 @@ if barstate.islast
 
         // Draw boxes for top 5 buckets on left side of visible range
         int left_bar = bar_index - vpvr_lookback
-        for t = 0 to array.size(top_indices) - 1
-            int bi = array.get(top_indices, t)
-            float bucket_lo = lo + bi * bucket_size
-            float bucket_hi = bucket_lo + bucket_size
-            float bvol = array.get(vol_buckets, bi)
-            // Width proportional to volume
-            int box_width = math.round((bvol / max_vol) * (vpvr_lookback / 2))
-            if box_width < 1
-                box_width := 1
-            color box_col = bvol >= vol_median ? color.new(#F9A825, 60) : color.new(#1565C0, 60)
-            array.push(vpvr_boxes, box.new(left_bar, bucket_hi, left_bar + box_width, bucket_lo,
-              bgcolor=box_col,
-              border_color=box_col,
-              border_width=1))
+        if array.size(top_indices) > 0
+            for t = 0 to array.size(top_indices) - 1
+                int bi = array.get(top_indices, t)
+                float bucket_lo = lo + bi * bucket_size
+                float bucket_hi = bucket_lo + bucket_size
+                float bvol = array.get(vol_buckets, bi)
+                // Width proportional to volume
+                int box_width = math.round((bvol / max_vol) * (vpvr_lookback / 2))
+                if box_width < 1
+                    box_width := 1
+                color box_col = bvol >= vol_median ? color.new(#F9A825, 60) : color.new(#1565C0, 60)
+                array.push(vpvr_boxes, box.new(left_bar, bucket_hi, left_bar + box_width, bucket_lo,
+                  bgcolor=box_col,
+                  border_color=box_col,
+                  border_width=1))
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 7: ALERTS
