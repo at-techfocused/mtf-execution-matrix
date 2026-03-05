@@ -51,10 +51,15 @@ vix_symbol = input.string("CBOE:VIX",
 vix_threshold = input.float(20.0,
   "VIX Safe Zone (default < 20)",
   group="Market Context: Stocks")
-nylow_symbol = input.string("FRED:USNIM",
+nylow_enabled = input.bool(false,
+  "Enable NYSE New Lows Check",
+  group="Market Context: Stocks")
+nylow_symbol = input.string("INDEX:NYLOW",
   "NYSE New Lows Symbol",
   group="Market Context: Stocks")
-// Fallback hierarchy: FRED:USNIM → INDEX:NYLOW → leave blank to disable
+// Fallback hierarchy: INDEX:NYLOW → MMTH → disable toggle if unavailable
+// request.security() hard-crashes on invalid symbols; the toggle routes
+// the call through syminfo.tickerid when disabled so it never crashes.
 nylow_threshold = input.int(500,
   "NYSE New Lows Threshold",
   group="Market Context: Stocks")
@@ -230,12 +235,15 @@ raw_vix = request.security(vix_symbol, "D",
 vix_close   = na(raw_vix) ? 999999.0 : raw_vix
 stock_ctx_1 = vix_close < vix_threshold
 
-raw_nylow = request.security(nylow_symbol, "D",
+// When nylow_enabled is false, use syminfo.tickerid (always valid) to avoid
+// request.security() hard-crash on invalid/unavailable NYSE lows symbols.
+nylow_safe_symbol = nylow_enabled ? nylow_symbol : syminfo.tickerid
+raw_nylow = request.security(nylow_safe_symbol, "D",
   close,
   gaps=barmerge.gaps_off,
   lookahead=barmerge.lookahead_off)
 nylow_close = na(raw_nylow) ? 999999.0 : raw_nylow
-stock_ctx_2 = nylow_close < nylow_threshold
+stock_ctx_2 = nylow_enabled ? nylow_close < nylow_threshold : true
 
 // --- Crypto Context (na-safe) ---
 // BTC Dominance proxy: < threshold = altcoin-friendly market
