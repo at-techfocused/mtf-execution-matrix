@@ -496,16 +496,20 @@ if barstate.islast
 
 var box[] vpvr_boxes = array.new_box(0)
 
+// Hoist ta.highest / ta.lowest outside conditional scope so they run on every bar
+float vpvr_hi  = ta.highest(high, vpvr_lookback)
+float vpvr_lo  = ta.lowest(low, vpvr_lookback)
+float vpvr_rng = vpvr_hi - vpvr_lo
+
 if barstate.islast
     // Clean up previous boxes
     for b = 0 to array.size(vpvr_boxes) - 1
         box.delete(array.get(vpvr_boxes, b))
     array.clear(vpvr_boxes)
 
-    // Determine price range over lookback
-    float hi = ta.highest(high, vpvr_lookback)
-    float lo = ta.lowest(low, vpvr_lookback)
-    float rng = hi - lo
+    float hi = vpvr_hi
+    float lo = vpvr_lo
+    float rng = vpvr_rng
 
     if rng > 0
         int N = 20
@@ -589,15 +593,13 @@ alertcondition(confidence_pct >= 80,
   message="MTF-BCD: Confidence score is above 80%.")
 
 // ── MODIFICATION 5: DYNAMIC MARKET CONTEXT ALERTS ──
-// Replaced static VIX / NYSE:LOWN alerts with gated alerts
-// that fire for whichever asset class is active.
-alertcondition(not market_check_1,
-  title="Market Context Warning 1",
-  message="Context Alert 1 on " + syminfo.ticker + ": " + market_label_1)
+// alertcondition requires const string for message, so we use alert()
+// inside runtime conditions to include syminfo.ticker and dynamic labels.
+if barstate.isconfirmed and not market_check_1
+    alert("Context Alert 1 on " + syminfo.ticker + ": " + market_label_1, alert.freq_once_per_bar)
 
-alertcondition(not market_check_2,
-  title="Market Context Warning 2",
-  message="Context Alert 2 on " + syminfo.ticker + ": " + market_label_2)
+if barstate.isconfirmed and not market_check_2
+    alert("Context Alert 2 on " + syminfo.ticker + ": " + market_label_2, alert.freq_once_per_bar)
 
 alertcondition(W_elder_red,
   title="Elder Impulse Red (W)",
