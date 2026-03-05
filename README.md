@@ -1,6 +1,6 @@
 # MTF Buy Confluence Dashboard (MTF-BCD)
 
-A multi-timeframe buying checklist indicator for TradingView, built in Pine Script v5. It consolidates weekly and daily trend signals, momentum readings, Elder Impulse states, and broad market context into a single on-chart dashboard with an overall confidence score.
+A multi-timeframe buying checklist indicator for TradingView, built in Pine Script v5. It consolidates weekly and daily trend signals, momentum readings, Elder Impulse states, and broad market context into a single on-chart dashboard with an overall confidence score. Supports **stocks**, **crypto**, and **forex** asset classes with auto-detected market context.
 
 Created by [@techfocused](https://x.com/techfocused)
 
@@ -8,7 +8,13 @@ Created by [@techfocused](https://x.com/techfocused)
 
 ## What It Does
 
-Instead of flipping between timeframes and indicators, MTF-BCD resolves everything on one chart. It runs 11 asset-specific checks across weekly and daily timeframes, displays pass/fail for each, and rolls them into a single confidence percentage. Two additional market-wide checks (VIX and NYSE New Lows) are shown separately so you can see both the stock's setup and the environment it's trading in.
+Instead of flipping between timeframes and indicators, MTF-BCD resolves everything on one chart. It runs 11 asset-specific checks across weekly and daily timeframes, displays pass/fail for each, and rolls them into a single confidence percentage. Two additional market-wide context checks are shown separately — these automatically adapt based on the asset class you're charting:
+
+- **Stocks**: VIX fear gauge + NYSE New Lows breadth
+- **Crypto**: BTC Dominance + BTC price vs. its trend MA
+- **Forex**: DXY trend alignment + US 10Y Yield stability
+
+The dashboard header shows the detected asset class (e.g., `[STOCK]`, `[CRYPTO]`, `[FOREX]`) so you always know which context checks are active.
 
 ---
 
@@ -36,12 +42,28 @@ Each check shows a green checkmark or red X. All 11 are included in the confiden
 
 ### Market Context (Rows 13-14)
 
-These two checks monitor the broader market environment. They are displayed for awareness but are **not** included in the confidence percentage:
+These two checks monitor the broader market environment. They are displayed for awareness but are **not** included in the confidence percentage. The checks shown depend on the asset class detected via `syminfo.type`:
+
+#### Stocks (`syminfo.type == "stock"`)
 
 | Check | What It Measures |
 |-------|-----------------|
 | **VIX in Safe Zone** | VIX is below the threshold (default: 20). High VIX = elevated fear. |
-| **NYSE New Lows < 500** | Fewer than 500 new lows on the NYSE. High new lows = broad weakness. |
+| **NYSE New Lows < threshold** | Fewer new lows than threshold (default: 500). High new lows = broad weakness. |
+
+#### Crypto (`syminfo.type == "crypto"`)
+
+| Check | What It Measures |
+|-------|-----------------|
+| **BTC Dom < threshold** | BTC dominance below threshold (default: 60%). Low dominance = altcoin-friendly. |
+| **BTC > 50D SMA** | BTC price is above its trend moving average. BTC trending up = healthy crypto market. |
+
+#### Forex (`syminfo.type == "forex"`)
+
+| Check | What It Measures |
+|-------|-----------------|
+| **DXY Trend Aligned** | Dollar index is below/above its MA depending on your setting. Most pairs benefit from a weak dollar. |
+| **US10Y < threshold** | US 10-Year yield is below the stability threshold (default: 5.0). High yields = risk-off pressure. |
 
 ### Overall Confidence (Row 15)
 
@@ -92,13 +114,14 @@ Since TradingView's built-in VPVR is not accessible from Pine Script, this overl
 
 ## Alerts
 
-Five alert conditions are available for TradingView's alert system:
+Six alert conditions are available for TradingView's alert system:
 
 | Alert | Triggers When |
 |-------|--------------|
 | **All Asset Checks Passed** | Confidence hits 100% — every enabled check is green |
 | **Confidence Above 80%** | Confidence is 80% or higher |
-| **VIX Danger Zone** | VIX crosses above the safe zone threshold |
+| **Market Context Warning 1** | First market context check fails (VIX / BTC Dom / DXY depending on asset class) |
+| **Market Context Warning 2** | Second market context check fails (NYSE Lows / BTC trend / US10Y depending on asset class) |
 | **Elder Impulse Red (W)** | Weekly Elder Impulse turns red — selling pressure detected |
 | **Elder Impulse Red (D)** | Daily Elder Impulse turns red |
 
@@ -126,14 +149,32 @@ To set up an alert: click the alert icon on TradingView, select "MTF Buy Conflue
 | Short EMA (Daily) | 8 | Daily short-term EMA |
 | Mid EMA (Daily) | 20 | Daily mid-term EMA |
 
-### Market Context
+### Market Context: Stocks
 
 | Input | Default | Purpose |
 |-------|---------|---------|
 | VIX Symbol | CBOE:VIX | Fear gauge symbol |
-| VIX Safe Zone Threshold | 20.0 | VIX below this = safe |
-| NYSE New Lows Symbol | NYSE:LOWN | Breadth indicator. If unavailable, use INDEX:NYLOW |
+| VIX Safe Zone | 20.0 | VIX below this = safe |
+| NYSE New Lows Symbol | FRED:USNIM | Breadth indicator. Fallback: INDEX:NYLOW, or leave blank to disable |
 | NYSE New Lows Threshold | 500 | New lows below this = healthy market |
+
+### Market Context: Crypto
+
+| Input | Default | Purpose |
+|-------|---------|---------|
+| BTC Dominance Threshold | 60.0 | BTC.D below this = altcoin-friendly |
+| BTC Price Symbol | BINANCE:BTCUSDT | Symbol for BTC price trend check |
+| BTC Trend MA Period | 50 | SMA period for BTC trend comparison |
+
+### Market Context: Forex
+
+| Input | Default | Purpose |
+|-------|---------|---------|
+| DXY Symbol | TVC:DXY | Dollar index symbol |
+| DXY MA Period | 50 | SMA period for DXY trend |
+| Bullish when DXY BELOW MA? | true | true = most pairs (EUR, GBP, etc.), false = USD-quote pairs |
+| US 10Y Yield Symbol | TVC:US10Y | Yield symbol for rate stability check |
+| US10Y Stable Threshold | 5.0 | Yield below this = stable rate environment |
 
 ### Confidence Score
 
@@ -149,7 +190,7 @@ Eleven individual toggles, one per check. Disable any check to exclude it from t
 
 2. **Read the checklist top to bottom.** The weekly checks (rows 1-4) tell you whether the higher timeframe supports a long position. The daily checks (rows 5-9) tell you whether the shorter timeframe agrees. The Elder checks (rows 10-11) act as a final filter — red on either timeframe is a warning.
 
-3. **Check market context separately.** Even if the stock scores 100%, a VIX spike or elevated new lows means the environment is hostile. Consider reducing position size or waiting for the market to stabilize.
+3. **Check market context separately.** Even if the asset scores 100%, hostile market conditions (VIX spike for stocks, BTC dominance surge for altcoins, DXY breakout for forex) mean the environment is working against you. Consider reducing position size or waiting for conditions to stabilize.
 
 ### Entry Criteria
 
@@ -157,8 +198,7 @@ The strongest buy setups occur when:
 
 - Confidence is 80% or higher
 - Both Elder Impulse checks are green or blue (not red)
-- VIX is in the safe zone
-- NYSE New Lows are under the threshold
+- Both market context checks are passing (green)
 - Price is pulling back toward a visible support (weekly 13 EMA, daily 50 SMA, or a volume node)
 
 ### Position Sizing and Risk
@@ -174,7 +214,7 @@ Use the confidence score as a position-sizing guide:
 
 - **Elder Red on Weekly** — This is the strongest sell signal in the system. If the weekly Elder turns red, it means the weekly EMA is falling and weekly MACD histogram is declining simultaneously. Respect this.
 - **Confidence dropping from 80%+ to below 50%** — The trend is deteriorating. Tighten stops or exit.
-- **VIX spiking above threshold while stock confidence is high** — The stock may look good in isolation, but systemic risk is elevated. Reduce exposure.
+- **Market context checks turning red while asset confidence is high** — The asset may look good in isolation, but systemic risk is elevated (VIX spike, BTC dominance surge, DXY breakout, yield spike). Reduce exposure.
 
 ### Customization Tips
 
@@ -195,11 +235,25 @@ Use the confidence score as a position-sizing guide:
 
 ---
 
+## Supported Asset Classes
+
+| Asset Class | Example Tickers | Market Context Checks |
+|-------------|----------------|----------------------|
+| **Stocks** | AAPL, MSFT, TSLA | VIX + NYSE New Lows |
+| **Crypto** | BTCUSDT, ETHUSDT, SOLUSDT | BTC Dominance + BTC Trend |
+| **Forex** | EURUSD, GBPUSD, USDJPY | DXY Trend + US 10Y Yield |
+
+Asset class is auto-detected via `syminfo.type`. No manual configuration needed — just open any chart and the dashboard adapts.
+
+---
+
 ## Notes
 
 - The indicator works on any ticker and any chart timeframe. Weekly and daily data are always resolved via `request.security()` regardless of the chart you're viewing.
 - No lookahead is used in any `request.security()` call. All data is confirmed (closed bar) data only.
-- If `NYSE:LOWN` is unavailable on your data feed, change the NYSE New Lows Symbol input to `INDEX:NYLOW`.
+- All external symbol calls (VIX, NYSE Lows, BTC.D, BTC price, DXY, US10Y) use na-safe guards. If a symbol is unavailable on your data feed, the corresponding check safely fails (shows red) instead of crashing the script.
+- The default NYSE New Lows symbol is `FRED:USNIM`. If unavailable, try `INDEX:NYLOW` or leave blank to disable.
+- If `CRYPTOCAP:BTC.D` is unavailable on your data feed, try using a BTC dominance symbol from your exchange.
 - The VPVR approximation uses a maximum of 5 boxes (TradingView's `max_boxes_count` limit). It displays the top 5 volume nodes rather than the full profile.
 
 ---

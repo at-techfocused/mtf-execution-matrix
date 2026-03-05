@@ -34,12 +34,53 @@ sma_50   = input.int(50, "SMA Period (Daily)",   group="EMA Settings")
 ema_8    = input.int(8,  "Short EMA (Daily)",    group="EMA Settings")
 ema_20   = input.int(20, "Mid EMA (Daily)",      group="EMA Settings")
 
-// --- Market Context ---
-vix_symbol      = input.symbol("CBOE:VIX",  "VIX Symbol",            group="Market Context")
-vix_threshold   = input.float(20.0,         "VIX Safe Zone Threshold", group="Market Context")
-nylow_symbol    = input.symbol("NYSE:LOWN", "NYSE New Lows Symbol",   group="Market Context")
-// If NYSE:LOWN is unavailable, replace with INDEX:NYLOW
-nylow_threshold = input.int(500, "NYSE New Lows Threshold", group="Market Context")
+// ── BUG FIX: Invalid Symbol Guard ──
+// ── MODIFICATION 2: MARKET CONTEXT INPUTS ──
+// Replaced single "Market Context" group with per-asset-class groups.
+// NYSE:LOWN replaced with FRED:USNIM as the default symbol.
+
+// --- Stock Inputs ---
+vix_symbol      = input.symbol("CBOE:VIX",
+                    "VIX Symbol",
+                    group="Market Context: Stocks")
+vix_threshold   = input.float(20.0,
+                    "VIX Safe Zone (default < 20)",
+                    group="Market Context: Stocks")
+nylow_symbol    = input.symbol("FRED:USNIM",
+                    "NYSE New Lows Symbol",
+                    group="Market Context: Stocks")
+// Fallback hierarchy: FRED:USNIM → INDEX:NYLOW → leave blank to disable
+nylow_threshold = input.int(500,
+                    "NYSE New Lows Threshold",
+                    group="Market Context: Stocks")
+
+// --- Crypto Inputs ---
+btc_dom_threshold = input.float(60.0,
+                      "BTC Dominance Threshold (default < 60)",
+                      group="Market Context: Crypto")
+btc_symbol        = input.symbol("BINANCE:BTCUSDT",
+                      "BTC Price Symbol",
+                      group="Market Context: Crypto")
+btc_ma_period     = input.int(50,
+                      "BTC Trend MA Period",
+                      group="Market Context: Crypto")
+
+// --- Forex Inputs ---
+dxy_symbol      = input.symbol("TVC:DXY",
+                    "DXY Symbol",
+                    group="Market Context: Forex")
+dxy_ma_period   = input.int(50,
+                    "DXY MA Period",
+                    group="Market Context: Forex")
+dxy_bullish     = input.bool(true,
+                    "Bullish when DXY BELOW MA? (true for most pairs)",
+                    group="Market Context: Forex")
+us10y_symbol    = input.symbol("TVC:US10Y",
+                    "US 10Y Yield Symbol",
+                    group="Market Context: Forex")
+us10y_threshold = input.float(5.0,
+                    "US10Y Stable Threshold (default < 5.0)",
+                    group="Market Context: Forex")
 
 // --- Confidence Score Toggles ---
 inc_01 = input.bool(true, "Include 13W MA Rising in Score",        group="Confidence Score")
@@ -75,6 +116,11 @@ anchor_price2 = input.float(0, "Measurement Anchor 2 Price", group="Measurement"
 
 // --- Overlay 5: Volume-by-Price Approximation ---
 vpvr_lookback = input.int(100, "VPVR Lookback Bars", minval=10, group="Volume Profile")
+
+// ── MODIFICATION 1: ASSET CLASS DETECTION ──
+is_crypto = syminfo.type == "crypto"
+is_stock  = syminfo.type == "stock"
+is_forex  = syminfo.type == "forex"
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 3: MULTI-TIMEFRAME CALCULATIONS
@@ -166,22 +212,73 @@ D_elder_red   = (D_ema13[0] < D_ema13[1]) and (D_hist[0] < D_hist[1])
 D_elder_blue  = not D_elder_green and not D_elder_red
 D_elder_ok    = not D_elder_red
 
-// --- MARKET CONTEXT (Global — not ticker-specific) ---
+// ── MODIFICATION 3: MARKET CONTEXT CALCULATIONS ──
+// All external request.security() calls are na-safe guarded.
+// If a symbol resolves to na, the fallback ensures the check
+// safely FAILS rather than crashing the script.
 
-// VIX daily close (market-wide fear gauge)
-vix_close = request.security(vix_symbol, "D",
-  close,
-  gaps=barmerge.gaps_off,
-  lookahead=barmerge.lookahead_off)
-vix_safe = vix_close < vix_threshold
+// --- Stock Context (na-safe) ---
+raw_vix     = request.security(vix_symbol, "D", close,
+                gaps=barmerge.gaps_off,
+                lookahead=barmerge.lookahead_off)
+vix_close   = na(raw_vix) ? 999999.0 : raw_vix
+stock_ctx_1 = vix_close < vix_threshold
 
-// NYSE New Lows daily close (breadth indicator)
-// If NYSE:LOWN is unavailable, replace with INDEX:NYLOW
-nylow_close = request.security(nylow_symbol, "D",
-  close,
-  gaps=barmerge.gaps_off,
-  lookahead=barmerge.lookahead_off)
-nylow_safe = nylow_close < nylow_threshold
+raw_nylow   = request.security(nylow_symbol, "D", close,
+                gaps=barmerge.gaps_off,
+                lookahead=barmerge.lookahead_off)
+nylow_close = na(raw_nylow) ? 999999.0 : raw_nylow
+stock_ctx_2 = nylow_close < nylow_threshold
+
+// --- Crypto Context (na-safe) ---
+// BTC Dominance proxy: < threshold = altcoin-friendly
+// If CRYPTOCAP:BTC.D unavailable, try BTCDOMUSDT on your exchange
+raw_btc_dom  = request.security("CRYPTOCAP:BTC.D", "D", close,
+                 gaps=barmerge.gaps_off,
+                 lookahead=barmerge.lookahead_off)
+btc_dom      = na(raw_btc_dom) ? 999999.0 : raw_btc_dom
+crypto_ctx_1 = btc_dom < btc_dom_threshold
+
+raw_btc_price = request.security(btc_symbol, "D", close,
+                  gaps=barmerge.gaps_off,
+                  lookahead=barmerge.lookahead_off)
+raw_btc_sma   = request.security(btc_symbol, "D",
+                  ta.sma(close, btc_ma_period),
+                  gaps=barmerge.gaps_off,
+                  lookahead=barmerge.lookahead_off)
+btc_price     = na(raw_btc_price) ? 0.0 : raw_btc_price
+btc_sma       = na(raw_btc_sma)   ? 0.0 : raw_btc_sma
+crypto_ctx_2  = btc_price > btc_sma
+
+// --- Forex Context (na-safe) ---
+raw_dxy     = request.security(dxy_symbol, "D", close,
+                gaps=barmerge.gaps_off,
+                lookahead=barmerge.lookahead_off)
+raw_dxy_sma = request.security(dxy_symbol, "D",
+                ta.sma(close, dxy_ma_period),
+                gaps=barmerge.gaps_off,
+                lookahead=barmerge.lookahead_off)
+dxy_close   = na(raw_dxy)     ? 0.0 : raw_dxy
+dxy_sma     = na(raw_dxy_sma) ? 0.0 : raw_dxy_sma
+dxy_aligned = dxy_bullish ?
+                dxy_close < dxy_sma :
+                dxy_close > dxy_sma
+forex_ctx_1 = dxy_aligned
+
+raw_us10y   = request.security(us10y_symbol, "D", close,
+                gaps=barmerge.gaps_off,
+                lookahead=barmerge.lookahead_off)
+us10y_close = na(raw_us10y) ? 999999.0 : raw_us10y
+forex_ctx_2 = us10y_close < us10y_threshold
+
+// --- Final Gated Resolution ---
+market_check_1 = is_crypto ? crypto_ctx_1 :
+                 is_forex  ? forex_ctx_1  :
+                             stock_ctx_1
+
+market_check_2 = is_crypto ? crypto_ctx_2 :
+                 is_forex  ? forex_ctx_2  :
+                             stock_ctx_2
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 4: CONFIDENCE SCORE LOGIC
@@ -223,9 +320,28 @@ for i = 0 to 10
 
 confidence_pct = total > 0 ? math.round((passed / total) * 100) : 0
 
-// Market context checks (do NOT contribute to confidence_pct)
-market_checks = array.from(vix_safe, nylow_safe)
-market_labels = array.from("VIX in Safe Zone", "NYSE New Lows < 500")
+// ── MODIFICATION 4: DYNAMIC TABLE LABELS ──
+// Market context labels change based on the detected asset class.
+market_label_1 = is_crypto ?
+                   "BTC Dom < " + str.tostring(btc_dom_threshold) :
+                 is_forex  ?
+                   "DXY Trend Aligned" :
+                   "VIX in Safe Zone"
+
+market_label_2 = is_crypto ?
+                   "BTC > " + str.tostring(btc_ma_period) + "D SMA" :
+                 is_forex  ?
+                   "US10Y < " + str.tostring(us10y_threshold) :
+                   "NYSE New Lows < " + str.tostring(nylow_threshold)
+
+market_checks = array.from(market_check_1, market_check_2)
+market_labels = array.from(market_label_1, market_label_2)
+
+// Asset class tag for header
+asset_tag   = is_crypto ? " [CRYPTO]" :
+              is_forex  ? " [FOREX]"  :
+                          " [STOCK]"
+header_text = "BUYING CHECKLIST: " + syminfo.ticker + asset_tag
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 5: TABLE / DASHBOARD UI
@@ -239,8 +355,8 @@ var table dashboard = table.new(position.top_right, 2, 16,
   frame_width=1)
 
 if barstate.islast
-    // Row 0: Header
-    table.cell(dashboard, 0, 0, "BUYING CHECKLIST: " + syminfo.ticker,
+    // Row 0: Header (with asset class tag)
+    table.cell(dashboard, 0, 0, header_text,
       bgcolor=COLOR_HEADER, text_color=color.white, text_size=size.small, text_halign=text.align_left)
     table.cell(dashboard, 1, 0, "STATUS",
       bgcolor=COLOR_HEADER, text_color=color.white, text_size=size.small, text_halign=text.align_center)
@@ -263,7 +379,7 @@ if barstate.islast
       bgcolor=COLOR_SEP, text_color=color.gray, text_size=size.small)
     table.merge_cells(dashboard, 0, 12, 1, 12)
 
-    // Rows 13–14: Market context checks
+    // Rows 13–14: Market context checks (dynamic labels per asset class)
     for j = 0 to 1
         bool mchk = array.get(market_checks, j)
         string mlbl = array.get(market_labels, j)
@@ -432,9 +548,18 @@ alertcondition(confidence_pct >= 80,
   title="Confidence Above 80%",
   message="MTF-BCD: Confidence score is above 80%.")
 
-alertcondition(not vix_safe,
-  title="VIX Danger Zone",
-  message="MTF-BCD: VIX has exceeded the safe zone threshold!")
+// ── MODIFICATION 5: DYNAMIC MARKET CONTEXT ALERTS ──
+// Replaced static VIX / NYSE:LOWN alerts with gated alerts
+// that fire for whichever asset class is active.
+alertcondition(not market_check_1,
+  title="Market Context Warning 1",
+  message="Context Alert 1 on " + syminfo.ticker +
+          ": " + market_label_1)
+
+alertcondition(not market_check_2,
+  title="Market Context Warning 2",
+  message="Context Alert 2 on " + syminfo.ticker +
+          ": " + market_label_2)
 
 alertcondition(W_elder_red,
   title="Elder Impulse Red (W)",
