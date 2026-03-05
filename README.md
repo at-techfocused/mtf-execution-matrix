@@ -114,18 +114,18 @@ Since TradingView's built-in VPVR is not accessible from Pine Script, this overl
 
 ## Alerts
 
-Six alert conditions are available for TradingView's alert system:
+Six alerts are available. Four use `alertcondition` (selectable from the alert dropdown) and two use `alert()` (fire automatically when the indicator is added as an alert source):
 
-| Alert | Triggers When |
-|-------|--------------|
-| **All Asset Checks Passed** | Confidence hits 100% — every enabled check is green |
-| **Confidence Above 80%** | Confidence is 80% or higher |
-| **Market Context Warning 1** | First market context check fails (VIX / BTC Dom / DXY depending on asset class) |
-| **Market Context Warning 2** | Second market context check fails (NYSE Lows / BTC trend / US10Y depending on asset class) |
-| **Elder Impulse Red (W)** | Weekly Elder Impulse turns red — selling pressure detected |
-| **Elder Impulse Red (D)** | Daily Elder Impulse turns red |
+| Alert | Type | Triggers When |
+|-------|------|--------------|
+| **All Asset Checks Passed** | `alertcondition` | Confidence hits 100% — every enabled check is green |
+| **Confidence Above 80%** | `alertcondition` | Confidence is 80% or higher |
+| **Market Context Warning 1** | `alert()` | First market context check fails (VIX / BTC Dom / DXY depending on asset class) |
+| **Market Context Warning 2** | `alert()` | Second market context check fails (NYSE Lows / BTC trend / US10Y depending on asset class) |
+| **Elder Impulse Red (W)** | `alertcondition` | Weekly Elder Impulse turns red — selling pressure detected |
+| **Elder Impulse Red (D)** | `alertcondition` | Daily Elder Impulse turns red |
 
-To set up an alert: click the alert icon on TradingView, select "MTF Buy Confluence Dashboard" as the condition, and choose the desired alert from the dropdown.
+**Setup:** For `alertcondition` alerts, click the alert icon on TradingView, select "MTF Buy Confluence Dashboard" as the condition, and choose the desired alert. For the two `alert()` market context warnings, add any alert on the indicator and check "Any alert() function call" — these include the ticker name and the specific context check that failed in the message body.
 
 ---
 
@@ -155,7 +155,8 @@ To set up an alert: click the alert icon on TradingView, select "MTF Buy Conflue
 |-------|---------|---------|
 | VIX Symbol | CBOE:VIX | Fear gauge symbol |
 | VIX Safe Zone | 20.0 | VIX below this = safe |
-| NYSE New Lows Symbol | FRED:USNIM | Breadth indicator. Fallback: INDEX:NYLOW, or leave blank to disable |
+| Enable NYSE New Lows Check | false | Toggle on to activate the breadth check. Off by default to prevent crashes on unavailable symbols. |
+| NYSE New Lows Symbol | INDEX:NYLOW | Breadth indicator symbol. Only used when the toggle above is enabled. |
 | NYSE New Lows Threshold | 500 | New lows below this = healthy market |
 
 ### Market Context: Crypto
@@ -251,8 +252,9 @@ Asset class is auto-detected via `syminfo.type`. No manual configuration needed 
 
 - The indicator works on any ticker and any chart timeframe. Weekly and daily data are always resolved via `request.security()` regardless of the chart you're viewing.
 - No lookahead is used in any `request.security()` call. All data is confirmed (closed bar) data only.
-- All external symbol calls (VIX, NYSE Lows, BTC.D, BTC price, DXY, US10Y) use na-safe guards. If a symbol is unavailable on your data feed, the corresponding check safely fails (shows red) instead of crashing the script.
-- The default NYSE New Lows symbol is `FRED:USNIM`. If unavailable, try `INDEX:NYLOW` or leave blank to disable.
+- All external symbol calls (VIX, BTC.D, BTC price, DXY, US10Y) use na-safe guards. If a symbol resolves but returns no data, the corresponding check safely fails (shows red) instead of crashing the script.
+- **NYSE New Lows** is disabled by default because no single symbol is universally available across all TradingView data feeds. To enable it, turn on "Enable NYSE New Lows Check" in settings and enter a valid symbol for your feed (try `INDEX:NYLOW` or your broker's equivalent). When disabled, the check auto-passes so it doesn't penalize the market context display.
+- `request.security()` will hard-crash on truly invalid symbols — `na()` guards only protect against symbols that exist but have no data. The NYSE lows toggle prevents this by routing through `syminfo.tickerid` when disabled.
 - If `CRYPTOCAP:BTC.D` is unavailable on your data feed, try using a BTC dominance symbol from your exchange.
 - The VPVR approximation uses a maximum of 5 boxes (TradingView's `max_boxes_count` limit). It displays the top 5 volume nodes rather than the full profile.
 
