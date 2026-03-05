@@ -1,7 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════
 // PART 1: SCRIPT METADATA
+// ── FIX 1: Pine Script v6 Upgrade ──
+// Upgraded from //@version=5 to //@version=6.
+// All input.symbol() calls replaced with input.string().
+// All multi-line expressions audited for v6 line continuation.
 // ═══════════════════════════════════════════════════════════════════
-//@version=5
+//@version=6
 indicator("MTF Buy Confluence Dashboard",
   shorttitle="MTF-BCD",
   overlay=true,
@@ -23,95 +27,96 @@ color COLOR_SEP      = color.new(#363A45, 0)
 // ═══════════════════════════════════════════════════════════════════
 
 // --- MACD Settings ---
-fast_length   = input.int(12, "Fast Length",   group="MACD Settings")
-slow_length   = input.int(25, "Slow Length",   group="MACD Settings")
-signal_length = input.int(5,  "Signal Length", group="MACD Settings")
+fast_length   = input.int(12, "Fast Length", group="MACD Settings")
+slow_length   = input.int(25, "Slow Length", group="MACD Settings")
+signal_length = input.int(5, "Signal Length", group="MACD Settings")
 
 // --- EMA Settings ---
-ema_fast = input.int(13, "Fast EMA Period",      group="EMA Settings")
-ema_slow = input.int(34, "Slow EMA Period",      group="EMA Settings")
-sma_50   = input.int(50, "SMA Period (Daily)",   group="EMA Settings")
-ema_8    = input.int(8,  "Short EMA (Daily)",    group="EMA Settings")
-ema_20   = input.int(20, "Mid EMA (Daily)",      group="EMA Settings")
+ema_fast = input.int(13, "Fast EMA Period", group="EMA Settings")
+ema_slow = input.int(34, "Slow EMA Period", group="EMA Settings")
+sma_50   = input.int(50, "SMA Period (Daily)", group="EMA Settings")
+ema_8    = input.int(8, "Short EMA (Daily)", group="EMA Settings")
+ema_20   = input.int(20, "Mid EMA (Daily)", group="EMA Settings")
 
-// ── BUG FIX: Invalid Symbol Guard ──
+// ── FIX 2: Invalid Symbol Guard ──
 // ── MODIFICATION 2: MARKET CONTEXT INPUTS ──
-// Replaced single "Market Context" group with per-asset-class groups.
-// NYSE:LOWN replaced with FRED:USNIM as the default symbol.
+// NYSE:LOWN replaced with FRED:USNIM. All input.symbol() replaced
+// with input.string() for v6 compatibility. Na-safe guards applied
+// to every external request.security() call below.
 
 // --- Stock Inputs ---
-vix_symbol      = input.symbol("CBOE:VIX",
-                    "VIX Symbol",
-                    group="Market Context: Stocks")
-vix_threshold   = input.float(20.0,
-                    "VIX Safe Zone (default < 20)",
-                    group="Market Context: Stocks")
-nylow_symbol    = input.symbol("FRED:USNIM",
-                    "NYSE New Lows Symbol",
-                    group="Market Context: Stocks")
+vix_symbol = input.string("CBOE:VIX",
+  "VIX Symbol",
+  group="Market Context: Stocks")
+vix_threshold = input.float(20.0,
+  "VIX Safe Zone (default < 20)",
+  group="Market Context: Stocks")
+nylow_symbol = input.string("FRED:USNIM",
+  "NYSE New Lows Symbol",
+  group="Market Context: Stocks")
 // Fallback hierarchy: FRED:USNIM → INDEX:NYLOW → leave blank to disable
 nylow_threshold = input.int(500,
-                    "NYSE New Lows Threshold",
-                    group="Market Context: Stocks")
+  "NYSE New Lows Threshold",
+  group="Market Context: Stocks")
 
 // --- Crypto Inputs ---
 btc_dom_threshold = input.float(60.0,
-                      "BTC Dominance Threshold (default < 60)",
-                      group="Market Context: Crypto")
-btc_symbol        = input.symbol("BINANCE:BTCUSDT",
-                      "BTC Price Symbol",
-                      group="Market Context: Crypto")
-btc_ma_period     = input.int(50,
-                      "BTC Trend MA Period",
-                      group="Market Context: Crypto")
+  "BTC Dominance Threshold",
+  group="Market Context: Crypto")
+btc_symbol = input.string("BINANCE:BTCUSDT",
+  "BTC Price Symbol",
+  group="Market Context: Crypto")
+btc_ma_period = input.int(50,
+  "BTC Trend MA Period",
+  group="Market Context: Crypto")
 
 // --- Forex Inputs ---
-dxy_symbol      = input.symbol("TVC:DXY",
-                    "DXY Symbol",
-                    group="Market Context: Forex")
-dxy_ma_period   = input.int(50,
-                    "DXY MA Period",
-                    group="Market Context: Forex")
-dxy_bullish     = input.bool(true,
-                    "Bullish when DXY BELOW MA? (true for most pairs)",
-                    group="Market Context: Forex")
-us10y_symbol    = input.symbol("TVC:US10Y",
-                    "US 10Y Yield Symbol",
-                    group="Market Context: Forex")
+dxy_symbol = input.string("TVC:DXY",
+  "DXY Symbol",
+  group="Market Context: Forex")
+dxy_ma_period = input.int(50,
+  "DXY MA Period",
+  group="Market Context: Forex")
+dxy_bullish = input.bool(true,
+  "Bullish when DXY BELOW MA?",
+  group="Market Context: Forex")
+us10y_symbol = input.string("TVC:US10Y",
+  "US 10Y Yield Symbol",
+  group="Market Context: Forex")
 us10y_threshold = input.float(5.0,
-                    "US10Y Stable Threshold (default < 5.0)",
-                    group="Market Context: Forex")
+  "US10Y Threshold (default < 5.0)",
+  group="Market Context: Forex")
 
 // --- Confidence Score Toggles ---
-inc_01 = input.bool(true, "Include 13W MA Rising in Score",        group="Confidence Score")
-inc_02 = input.bool(true, "Include 34W MA Rising in Score",        group="Confidence Score")
-inc_03 = input.bool(true, "Include 13W EMA > 34W EMA in Score",    group="Confidence Score")
-inc_04 = input.bool(true, "Include W MACD Hist Rising in Score",   group="Confidence Score")
-inc_05 = input.bool(true, "Include D MACD Hist Rising in Score",   group="Confidence Score")
-inc_06 = input.bool(true, "Include 8D EMA > 20D EMA in Score",     group="Confidence Score")
-inc_07 = input.bool(true, "Include Price > 13W EMA in Score",      group="Confidence Score")
-inc_08 = input.bool(true, "Include Price > 50D SMA in Score",      group="Confidence Score")
-inc_09 = input.bool(true, "Include MACD(12,25,5) Pos in Score",    group="Confidence Score")
-inc_10 = input.bool(true, "Include Elder W Not Red in Score",      group="Confidence Score")
-inc_11 = input.bool(true, "Include Elder D Not Red in Score",      group="Confidence Score")
+inc_01 = input.bool(true, "Include 13W MA Rising in Score", group="Confidence Score")
+inc_02 = input.bool(true, "Include 34W MA Rising in Score", group="Confidence Score")
+inc_03 = input.bool(true, "Include 13W EMA > 34W EMA in Score", group="Confidence Score")
+inc_04 = input.bool(true, "Include W MACD Hist Rising in Score", group="Confidence Score")
+inc_05 = input.bool(true, "Include D MACD Hist Rising in Score", group="Confidence Score")
+inc_06 = input.bool(true, "Include 8D EMA > 20D EMA in Score", group="Confidence Score")
+inc_07 = input.bool(true, "Include Price > 13W EMA in Score", group="Confidence Score")
+inc_08 = input.bool(true, "Include Price > 50D SMA in Score", group="Confidence Score")
+inc_09 = input.bool(true, "Include MACD(12,25,5) Pos in Score", group="Confidence Score")
+inc_10 = input.bool(true, "Include Elder W Not Red in Score", group="Confidence Score")
+inc_11 = input.bool(true, "Include Elder D Not Red in Score", group="Confidence Score")
 
 // --- Overlay 2: Manual Anchor Trendlines (Wedge) ---
-upper_bar1   = input.int(0,   "Upper Trendline Anchor 1 Bar",   group="Trendlines")
+upper_bar1   = input.int(0, "Upper Trendline Anchor 1 Bar", group="Trendlines")
 upper_price1 = input.float(0, "Upper Trendline Anchor 1 Price", group="Trendlines")
-upper_bar2   = input.int(0,   "Upper Trendline Anchor 2 Bar",   group="Trendlines")
+upper_bar2   = input.int(0, "Upper Trendline Anchor 2 Bar", group="Trendlines")
 upper_price2 = input.float(0, "Upper Trendline Anchor 2 Price", group="Trendlines")
-lower_bar1   = input.int(0,   "Lower Trendline Anchor 1 Bar",   group="Trendlines")
+lower_bar1   = input.int(0, "Lower Trendline Anchor 1 Bar", group="Trendlines")
 lower_price1 = input.float(0, "Lower Trendline Anchor 1 Price", group="Trendlines")
-lower_bar2   = input.int(0,   "Lower Trendline Anchor 2 Bar",   group="Trendlines")
+lower_bar2   = input.int(0, "Lower Trendline Anchor 2 Bar", group="Trendlines")
 lower_price2 = input.float(0, "Lower Trendline Anchor 2 Price", group="Trendlines")
 
 // --- Overlay 3: Key Horizontal Level ---
 key_level = input.float(0.0, "Key Horizontal Level", group="Key Level")
 
 // --- Overlay 4: Measurement Label ---
-anchor_bar1   = input.int(0,   "Measurement Anchor 1 Bar",   group="Measurement")
+anchor_bar1   = input.int(0, "Measurement Anchor 1 Bar", group="Measurement")
 anchor_price1 = input.float(0, "Measurement Anchor 1 Price", group="Measurement")
-anchor_bar2   = input.int(0,   "Measurement Anchor 2 Bar",   group="Measurement")
+anchor_bar2   = input.int(0, "Measurement Anchor 2 Bar", group="Measurement")
 anchor_price2 = input.float(0, "Measurement Anchor 2 Price", group="Measurement")
 
 // --- Overlay 5: Volume-by-Price Approximation ---
@@ -218,67 +223,66 @@ D_elder_ok    = not D_elder_red
 // safely FAILS rather than crashing the script.
 
 // --- Stock Context (na-safe) ---
-raw_vix     = request.security(vix_symbol, "D", close,
-                gaps=barmerge.gaps_off,
-                lookahead=barmerge.lookahead_off)
+raw_vix = request.security(vix_symbol, "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
 vix_close   = na(raw_vix) ? 999999.0 : raw_vix
 stock_ctx_1 = vix_close < vix_threshold
 
-raw_nylow   = request.security(nylow_symbol, "D", close,
-                gaps=barmerge.gaps_off,
-                lookahead=barmerge.lookahead_off)
+raw_nylow = request.security(nylow_symbol, "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
 nylow_close = na(raw_nylow) ? 999999.0 : raw_nylow
 stock_ctx_2 = nylow_close < nylow_threshold
 
 // --- Crypto Context (na-safe) ---
-// BTC Dominance proxy: < threshold = altcoin-friendly
+// BTC Dominance proxy: < threshold = altcoin-friendly market
 // If CRYPTOCAP:BTC.D unavailable, try BTCDOMUSDT on your exchange
-raw_btc_dom  = request.security("CRYPTOCAP:BTC.D", "D", close,
-                 gaps=barmerge.gaps_off,
-                 lookahead=barmerge.lookahead_off)
+raw_btc_dom = request.security("CRYPTOCAP:BTC.D", "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
 btc_dom      = na(raw_btc_dom) ? 999999.0 : raw_btc_dom
 crypto_ctx_1 = btc_dom < btc_dom_threshold
 
-raw_btc_price = request.security(btc_symbol, "D", close,
-                  gaps=barmerge.gaps_off,
-                  lookahead=barmerge.lookahead_off)
-raw_btc_sma   = request.security(btc_symbol, "D",
-                  ta.sma(close, btc_ma_period),
-                  gaps=barmerge.gaps_off,
-                  lookahead=barmerge.lookahead_off)
-btc_price     = na(raw_btc_price) ? 0.0 : raw_btc_price
-btc_sma       = na(raw_btc_sma)   ? 0.0 : raw_btc_sma
-crypto_ctx_2  = btc_price > btc_sma
+raw_btc_price = request.security(btc_symbol, "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
+raw_btc_sma = request.security(btc_symbol, "D",
+  ta.sma(close, btc_ma_period),
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
+btc_price    = na(raw_btc_price) ? 0.0 : raw_btc_price
+btc_sma      = na(raw_btc_sma) ? 0.0 : raw_btc_sma
+crypto_ctx_2 = btc_price > btc_sma
 
 // --- Forex Context (na-safe) ---
-raw_dxy     = request.security(dxy_symbol, "D", close,
-                gaps=barmerge.gaps_off,
-                lookahead=barmerge.lookahead_off)
+raw_dxy = request.security(dxy_symbol, "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
 raw_dxy_sma = request.security(dxy_symbol, "D",
-                ta.sma(close, dxy_ma_period),
-                gaps=barmerge.gaps_off,
-                lookahead=barmerge.lookahead_off)
-dxy_close   = na(raw_dxy)     ? 0.0 : raw_dxy
-dxy_sma     = na(raw_dxy_sma) ? 0.0 : raw_dxy_sma
-dxy_aligned = dxy_bullish ?
-                dxy_close < dxy_sma :
-                dxy_close > dxy_sma
+  ta.sma(close, dxy_ma_period),
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
+dxy_close = na(raw_dxy) ? 0.0 : raw_dxy
+dxy_sma   = na(raw_dxy_sma) ? 0.0 : raw_dxy_sma
+dxy_aligned = dxy_bullish ? dxy_close < dxy_sma : dxy_close > dxy_sma
 forex_ctx_1 = dxy_aligned
 
-raw_us10y   = request.security(us10y_symbol, "D", close,
-                gaps=barmerge.gaps_off,
-                lookahead=barmerge.lookahead_off)
+raw_us10y = request.security(us10y_symbol, "D",
+  close,
+  gaps=barmerge.gaps_off,
+  lookahead=barmerge.lookahead_off)
 us10y_close = na(raw_us10y) ? 999999.0 : raw_us10y
 forex_ctx_2 = us10y_close < us10y_threshold
 
 // --- Final Gated Resolution ---
-market_check_1 = is_crypto ? crypto_ctx_1 :
-                 is_forex  ? forex_ctx_1  :
-                             stock_ctx_1
-
-market_check_2 = is_crypto ? crypto_ctx_2 :
-                 is_forex  ? forex_ctx_2  :
-                             stock_ctx_2
+market_check_1 = is_crypto ? crypto_ctx_1 : is_forex ? forex_ctx_1 : stock_ctx_1
+market_check_2 = is_crypto ? crypto_ctx_2 : is_forex ? forex_ctx_2 : stock_ctx_2
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 4: CONFIDENCE SCORE LOGIC
@@ -286,25 +290,30 @@ market_check_2 = is_crypto ? crypto_ctx_2 :
 
 // 11 asset-specific boolean checks
 checks = array.from(
-  W_13MA_rising,    // "13W MA Rising"
-  W_34MA_rising,    // "34W MA Rising"
-  W_ema_cross,      // "13W EMA > 34W EMA"
-  W_macd_rising,    // "W MACD Hist Rising"
-  D_macd_rising,    // "D MACD Hist Rising"
-  D_8_above_20,     // "8D EMA > 20D EMA"
-  D_price_ema13,    // "Price > 13W EMA"
-  D_price_sma50,    // "Price > 50D SMA"
-  D_macd_pos,       // "MACD(12,25,5) Pos"
-  W_elder_ok,       // "Elder W Not Red"
-  D_elder_ok        // "Elder D Not Red"
-  )
+  W_13MA_rising,
+  W_34MA_rising,
+  W_ema_cross,
+  W_macd_rising,
+  D_macd_rising,
+  D_8_above_20,
+  D_price_ema13,
+  D_price_sma50,
+  D_macd_pos,
+  W_elder_ok,
+  D_elder_ok)
 
 labels = array.from(
-  "13W MA Rising", "34W MA Rising", "13W EMA > 34W EMA",
-  "W MACD Hist Rising", "D MACD Hist Rising", "8D EMA > 20D EMA",
-  "Price > 13W EMA", "Price > 50D SMA", "MACD(12,25,5) Pos",
-  "Elder W Not Red", "Elder D Not Red"
-  )
+  "13W MA Rising",
+  "34W MA Rising",
+  "13W EMA > 34W EMA",
+  "W MACD Hist Rising",
+  "D MACD Hist Rising",
+  "8D EMA > 20D EMA",
+  "Price > 13W EMA",
+  "Price > 50D SMA",
+  "MACD(12,25,5) Pos",
+  "Elder W Not Red",
+  "Elder D Not Red")
 
 // Toggle array for include/exclude
 toggles = array.from(inc_01, inc_02, inc_03, inc_04, inc_05, inc_06, inc_07, inc_08, inc_09, inc_10, inc_11)
@@ -322,25 +331,15 @@ confidence_pct = total > 0 ? math.round((passed / total) * 100) : 0
 
 // ── MODIFICATION 4: DYNAMIC TABLE LABELS ──
 // Market context labels change based on the detected asset class.
-market_label_1 = is_crypto ?
-                   "BTC Dom < " + str.tostring(btc_dom_threshold) :
-                 is_forex  ?
-                   "DXY Trend Aligned" :
-                   "VIX in Safe Zone"
+market_label_1 = is_crypto ? "BTC Dom < " + str.tostring(btc_dom_threshold) : is_forex ? "DXY Trend Aligned" : "VIX in Safe Zone"
 
-market_label_2 = is_crypto ?
-                   "BTC > " + str.tostring(btc_ma_period) + "D SMA" :
-                 is_forex  ?
-                   "US10Y < " + str.tostring(us10y_threshold) :
-                   "NYSE New Lows < " + str.tostring(nylow_threshold)
+market_label_2 = is_crypto ? "BTC > " + str.tostring(btc_ma_period) + "D SMA" : is_forex ? "US10Y < " + str.tostring(us10y_threshold) : "NYSE Lows < " + str.tostring(nylow_threshold)
 
 market_checks = array.from(market_check_1, market_check_2)
 market_labels = array.from(market_label_1, market_label_2)
 
 // Asset class tag for header
-asset_tag   = is_crypto ? " [CRYPTO]" :
-              is_forex  ? " [FOREX]"  :
-                          " [STOCK]"
+asset_tag = is_crypto ? " [CRYPTO]" : is_forex ? " [FOREX]" : " [STOCK]"
 header_text = "BUYING CHECKLIST: " + syminfo.ticker + asset_tag
 
 // ═══════════════════════════════════════════════════════════════════
@@ -357,45 +356,74 @@ var table dashboard = table.new(position.top_right, 2, 16,
 if barstate.islast
     // Row 0: Header (with asset class tag)
     table.cell(dashboard, 0, 0, header_text,
-      bgcolor=COLOR_HEADER, text_color=color.white, text_size=size.small, text_halign=text.align_left)
+      bgcolor=COLOR_HEADER,
+      text_color=color.white,
+      text_size=size.small,
+      text_halign=text.align_left)
     table.cell(dashboard, 1, 0, "STATUS",
-      bgcolor=COLOR_HEADER, text_color=color.white, text_size=size.small, text_halign=text.align_center)
+      bgcolor=COLOR_HEADER,
+      text_color=color.white,
+      text_size=size.small,
+      text_halign=text.align_center)
 
-    // Rows 1–11: Asset checks
+    // Rows 1-11: Asset checks
     for i = 0 to 10
         bool chk = array.get(checks, i)
         string lbl = array.get(labels, i)
         string status_txt = chk ? "✔" : "✘"
         color status_bg   = chk ? COLOR_GREEN : COLOR_RED
         table.cell(dashboard, 0, i + 1, lbl,
-          bgcolor=COLOR_BG, text_color=color.white, text_size=size.small, text_halign=text.align_left)
+          bgcolor=COLOR_BG,
+          text_color=color.white,
+          text_size=size.small,
+          text_halign=text.align_left)
         table.cell(dashboard, 1, i + 1, status_txt,
-          bgcolor=status_bg, text_color=color.white, text_size=size.small, text_halign=text.align_center)
+          bgcolor=status_bg,
+          text_color=color.white,
+          text_size=size.small,
+          text_halign=text.align_center)
 
     // Row 12: Separator
     table.cell(dashboard, 0, 12, "--- MARKET CONTEXT ---",
-      bgcolor=COLOR_SEP, text_color=color.gray, text_size=size.small, text_halign=text.align_center)
+      bgcolor=COLOR_SEP,
+      text_color=color.gray,
+      text_size=size.small,
+      text_halign=text.align_center)
     table.cell(dashboard, 1, 12, "",
-      bgcolor=COLOR_SEP, text_color=color.gray, text_size=size.small)
+      bgcolor=COLOR_SEP,
+      text_color=color.gray,
+      text_size=size.small)
     table.merge_cells(dashboard, 0, 12, 1, 12)
 
-    // Rows 13–14: Market context checks (dynamic labels per asset class)
+    // Rows 13-14: Market context checks (dynamic labels per asset class)
     for j = 0 to 1
         bool mchk = array.get(market_checks, j)
         string mlbl = array.get(market_labels, j)
         string mstatus = mchk ? "✔" : "✘"
         color mbg      = mchk ? COLOR_GREEN : COLOR_RED
         table.cell(dashboard, 0, j + 13, mlbl,
-          bgcolor=COLOR_BG, text_color=color.white, text_size=size.small, text_halign=text.align_left)
+          bgcolor=COLOR_BG,
+          text_color=color.white,
+          text_size=size.small,
+          text_halign=text.align_left)
         table.cell(dashboard, 1, j + 13, mstatus,
-          bgcolor=mbg, text_color=color.white, text_size=size.small, text_halign=text.align_center)
+          bgcolor=mbg,
+          text_color=color.white,
+          text_size=size.small,
+          text_halign=text.align_center)
 
     // Row 15: Confidence footer
     color conf_bg = confidence_pct >= 80 ? COLOR_GREEN : confidence_pct >= 50 ? COLOR_ORANGE : COLOR_RED
     table.cell(dashboard, 0, 15, "OVERALL CONFIDENCE",
-      bgcolor=conf_bg, text_color=color.white, text_size=size.small, text_halign=text.align_left)
+      bgcolor=conf_bg,
+      text_color=color.white,
+      text_size=size.small,
+      text_halign=text.align_left)
     table.cell(dashboard, 1, 15, str.tostring(confidence_pct) + "%",
-      bgcolor=conf_bg, text_color=color.white, text_size=size.small, text_halign=text.align_center)
+      bgcolor=conf_bg,
+      text_color=color.white,
+      text_size=size.small,
+      text_halign=text.align_center)
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 6: CHART OVERLAYS
@@ -420,12 +448,16 @@ if barstate.islast
     // Draw upper trendline if anchors are set
     if upper_bar1 != 0 and upper_bar2 != 0
         upper_trend := line.new(upper_bar1, upper_price1, upper_bar2, upper_price2,
-          color=#FF5252, width=2, extend=extend.right)
+          color=#FF5252,
+          width=2,
+          extend=extend.right)
 
     // Draw lower trendline if anchors are set
     if lower_bar1 != 0 and lower_bar2 != 0
         lower_trend := line.new(lower_bar1, lower_price1, lower_bar2, lower_price2,
-          color=#4CAF50, width=2, extend=extend.right)
+          color=#4CAF50,
+          width=2,
+          extend=extend.right)
 
 // --- OVERLAY 3: Key Horizontal Level ---
 var line key_hline = na
@@ -435,7 +467,10 @@ if barstate.islast
         line.delete(key_hline)
     if key_level > 0
         key_hline := line.new(bar_index - 1, key_level, bar_index, key_level,
-          color=#FF5252, width=2, style=line.style_solid, extend=extend.both)
+          color=#FF5252,
+          width=2,
+          style=line.style_solid,
+          extend=extend.both)
 
 // --- OVERLAY 4: Measurement Label ---
 var label meas_label = na
@@ -449,7 +484,10 @@ if barstate.islast
         color lbl_color    = point_change > 0 ? COLOR_GREEN : COLOR_RED
         string lbl_text    = str.tostring(point_change, "#.##") + " (" + str.tostring(pct_change, "#.##") + "%)"
         meas_label := label.new(anchor_bar2, anchor_price2, lbl_text,
-          style=label.style_label_left, color=lbl_color, textcolor=color.white, size=size.small)
+          style=label.style_label_left,
+          color=lbl_color,
+          textcolor=color.white,
+          size=size.small)
 
 // --- OVERLAY 5: Volume-by-Price Approximation ---
 // TradingView's native VPVR is not accessible via Pine Script API.
@@ -534,7 +572,9 @@ if barstate.islast
                 box_width := 1
             color box_col = bvol >= vol_median ? color.new(#F9A825, 60) : color.new(#1565C0, 60)
             array.push(vpvr_boxes, box.new(left_bar, bucket_hi, left_bar + box_width, bucket_lo,
-              bgcolor=box_col, border_color=box_col, border_width=1))
+              bgcolor=box_col,
+              border_color=box_col,
+              border_width=1))
 
 // ═══════════════════════════════════════════════════════════════════
 // PART 7: ALERTS
@@ -553,13 +593,11 @@ alertcondition(confidence_pct >= 80,
 // that fire for whichever asset class is active.
 alertcondition(not market_check_1,
   title="Market Context Warning 1",
-  message="Context Alert 1 on " + syminfo.ticker +
-          ": " + market_label_1)
+  message="Context Alert 1 on " + syminfo.ticker + ": " + market_label_1)
 
 alertcondition(not market_check_2,
   title="Market Context Warning 2",
-  message="Context Alert 2 on " + syminfo.ticker +
-          ": " + market_label_2)
+  message="Context Alert 2 on " + syminfo.ticker + ": " + market_label_2)
 
 alertcondition(W_elder_red,
   title="Elder Impulse Red (W)",

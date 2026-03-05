@@ -1,6 +1,6 @@
 # MTF Buy Confluence Dashboard (MTF-BCD)
 
-A multi-timeframe buying checklist indicator for TradingView, built in Pine Script v5. It consolidates weekly and daily trend signals, momentum readings, Elder Impulse states, and broad market context into a single on-chart dashboard with an overall confidence score. Supports **stocks**, **crypto**, and **forex** asset classes with auto-detected market context.
+A multi-timeframe buying checklist indicator for TradingView, built in Pine Script v6. It consolidates weekly and daily trend signals, momentum readings, Elder Impulse states, and broad market context into a single on-chart dashboard with an overall confidence score. Supports **stocks**, **crypto**, and **forex** asset classes with auto-detected market context.
 
 Created by [@techfocused](https://x.com/techfocused)
 
@@ -262,4 +262,4 @@ Asset class is auto-detected via `syminfo.type`. No manual configuration needed 
 
 Indicator concept and specifications by [@techfocused](https://x.com/techfocused).
 
-Built with Pine Script v5 for TradingView.
+Built with Pine Script v6 for TradingView.
