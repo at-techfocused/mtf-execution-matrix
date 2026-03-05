@@ -511,9 +511,10 @@ float vpvr_rng = vpvr_hi - vpvr_lo
 
 if barstate.islast
     // Clean up previous boxes
-    for b = 0 to array.size(vpvr_boxes) - 1
-        box.delete(array.get(vpvr_boxes, b))
-    array.clear(vpvr_boxes)
+    if array.size(vpvr_boxes) > 0
+        for b = 0 to array.size(vpvr_boxes) - 1
+            box.delete(array.get(vpvr_boxes, b))
+        array.clear(vpvr_boxes)
 
     float hi = vpvr_hi
     float lo = vpvr_lo
